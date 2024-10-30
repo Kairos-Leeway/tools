@@ -151,6 +151,7 @@ public class AutoClicker {
                 Robot robot = new Robot();
                 while (isClicking) {
                     robot.mousePress(mouseButton);
+                    robot.delay(200);
                     robot.mouseRelease(mouseButton);
                     clickCount++; // 增加点击次数
 
