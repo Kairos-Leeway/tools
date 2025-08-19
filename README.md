@@ -1,10 +1,10 @@
 # Clicker连点器
 
 一个简单好用的鼠标自动点击工具，支持多方案管理和全局快捷键。  
-<img width="1302" height="632" alt="image" src="https://github.com/user-attachments/assets/b5e4068e-2421-4928-9882-4c9ab00946ef" />
 
 
-https://github.com/user-attachments/assets/cb053b53-06d3-4261-898a-d8b2fe93f43c
+https://github.com/user-attachments/assets/ced601a2-0fa8-4b6a-bf89-6e17b5cac7dd
+
 
 
 
