@@ -12,8 +12,8 @@ public class ClickPoint {
     private final IntegerProperty x = new SimpleIntegerProperty();
     private final IntegerProperty y = new SimpleIntegerProperty();
     private final StringProperty button = new SimpleStringProperty("LEFT");
-    private final IntegerProperty moveDelay = new SimpleIntegerProperty(0);
-    private final IntegerProperty clickDelay = new SimpleIntegerProperty(100);
+    private final IntegerProperty moveDelay = new SimpleIntegerProperty(500);
+    private final IntegerProperty clickDelay = new SimpleIntegerProperty(200);
     private final BooleanProperty doClick = new SimpleBooleanProperty(true);
 
     public ClickPoint(int x, int y, String button, int moveDelay, int clickDelay, boolean doClick) {
