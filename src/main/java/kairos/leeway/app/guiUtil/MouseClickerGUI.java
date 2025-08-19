@@ -427,33 +427,23 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
     }
 
     private void runScheme() {
-        // 先保存当前方案
-        MouseScheme current = schemeListView.getSelectionModel().getSelectedItem();
-        if (current == null) {
+        MouseScheme currentScheme = schemeListView.getSelectionModel().getSelectedItem();
+        if (currentScheme == null) {
             appendLog("没有选中方案，无法运行");
             return;
         }
 
-        // 先保存当前方案
-        current.setPoints(FXCollections.observableArrayList(points));
-        saveAllSchemes();
-        appendLog("当前方案已保存");
+        // 先同步当前视图的点到方案对象
+        currentScheme.setPoints(FXCollections.observableArrayList(points));
 
-        if (current.getPoints().isEmpty()) {
+        // 再保存所有方案到文件
+        saveAllSchemes();
+        appendLog("所有方案已保存");
+        currentSchemeModified = false;
+
+        if (points.isEmpty()) {
             appendLog("当前方案没有点，无法运行");
             return;
-        }
-        current.setPoints(FXCollections.observableArrayList(points));
-        saveAllSchemes();
-        appendLog("当前方案已保存");
-        // 复制当前方案点列表，保证执行时不受外部修改影响
-        List<ClickPoint> pointsToRun = new ArrayList<>();
-        for (ClickPoint p : current.getPoints()) {
-            pointsToRun.add(new ClickPoint(
-                    p.getX(), p.getY(), p.getButton(),
-                    p.getMoveDelay(), p.getKeepDelay(),
-                    p.getClickDelay(), p.isDoClick()
-            ));
         }
 
         running = true;
@@ -487,6 +477,13 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         long finalEndMillis = endMillis;
         int finalLoopDelay = loopDelay;
 
+        // 复制当前方案的点，避免运行过程中 points 被 UI 修改影响
+        List<ClickPoint> pointsToRun = new ArrayList<>();
+        for (ClickPoint p : points) {
+            pointsToRun.add(new ClickPoint(p.getX(), p.getY(), p.getButton(), p.getMoveDelay(),
+                    p.getKeepDelay(), p.getClickDelay(), p.isDoClick()));
+        }
+
         new Thread(() -> {
             try {
                 Robot robot = new Robot();
@@ -496,6 +493,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
                     for (ClickPoint p : pointsToRun) {
                         if (!running) break;
 
+                        // 点的动作延时
                         if (p.getMoveDelay() > 0) Thread.sleep(p.getMoveDelay());
                         robot.mouseMove(p.getX(), p.getY());
 
@@ -514,8 +512,12 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
                     }
 
                     currentLoop++;
+
+                    // 判断循环次数或结束时间
                     if (finalLoopCount > 0 && currentLoop >= finalLoopCount) break;
                     if (finalEndMillis > 0 && System.currentTimeMillis() >= finalEndMillis) break;
+
+                    // 每轮循环只等待 loopDelay
                     if (finalLoopDelay > 0) Thread.sleep(finalLoopDelay);
                 }
             } catch (Exception e) {
@@ -526,6 +528,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
             }
         }).start();
     }
+
 
     private <T> TextFieldTableCell<ClickPoint, T> createEditingCell(javafx.util.StringConverter<T> converter) {
         TextFieldTableCell<ClickPoint, T> cell = new TextFieldTableCell<>(converter);
