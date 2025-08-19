@@ -31,3 +31,9 @@
 - **操作系统**：Windows / Linux / macOS  
 - **Java**：JDK 8  
 - **依赖库**：JavaFX 8、JNativeHook、Fastjson2 
+
+---
+## 下载
+- APP目录下下载Clicker.exe
+- exe由exe4j打包成exe, 下载即用, 免安装
+- 建议将软件放在单独文件夹下, 生成桌面快捷方式, 程序启动会生成配置文件, 避免误删除或丢失
