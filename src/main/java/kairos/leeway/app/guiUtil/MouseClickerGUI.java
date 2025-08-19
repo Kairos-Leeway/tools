@@ -7,6 +7,7 @@ import javafx.application.Platform;
 import javafx.beans.property.*;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.Button;
@@ -40,7 +41,8 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
     private final ObservableList<ClickPoint> points = FXCollections.observableArrayList();
     private final ObservableList<MouseScheme> schemes = FXCollections.observableArrayList();
     private volatile boolean running = false;
-
+    private static boolean currentSchemeModified = false;
+    private static boolean ignoreSchemeSelectionChange = false;
     private TableView<ClickPoint> table;
     private TextField loopCountInput, loopDelayField, endTimeInput;
     private ComboBox<String> loopModeBox;
@@ -68,16 +70,79 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
 
         schemeListView = new ListView<>(schemes);
         schemeListView.setPrefWidth(180);
+
         schemeListView.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (ignoreSchemeSelectionChange) return;
+
+            if (oldVal != null && currentSchemeModified) {
+                Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+                alert.setTitle("保存方案");
+                alert.setHeaderText("方案 '" + oldVal.getName() + "' 已修改，是否保存？");
+
+                ButtonType btnSave = new ButtonType("保存");
+                ButtonType btnDiscard = new ButtonType("不保存");
+                ButtonType btnCancel = new ButtonType("取消", ButtonBar.ButtonData.CANCEL_CLOSE);
+                alert.getButtonTypes().setAll(btnSave, btnDiscard, btnCancel);
+
+                Optional<ButtonType> result = alert.showAndWait();
+                if (result.isPresent()) {
+                    if (result.get() == btnSave) {
+                        oldVal.setPoints(FXCollections.observableArrayList(points));
+                        saveAllSchemes();
+                        appendLog("方案 '" + oldVal.getName() + "' 保存成功！");
+                    } else if (result.get() == btnCancel) {
+                        // 使用 runLater 延迟切换
+                        Platform.runLater(() -> {
+                            ignoreSchemeSelectionChange = true;
+                            schemeListView.getSelectionModel().select(oldVal);
+                            ignoreSchemeSelectionChange = false;
+                        });
+                        return;
+                    }
+                    // btnDiscard 不保存，直接切换即可
+                }
+            }
+
             if (newVal != null) {
                 points.setAll(FXCollections.observableArrayList(newVal.getPoints()));
+                currentSchemeModified = false;
             }
         });
-
+        schemeListView.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2 && event.getButton() == MouseButton.PRIMARY) {
+                MouseScheme selected = schemeListView.getSelectionModel().getSelectedItem();
+                if (selected != null) {
+                    TextInputDialog dialog = new TextInputDialog(selected.getName());
+                    dialog.setTitle("重命名方案");
+                    dialog.setHeaderText(null);
+                    dialog.setContentText("名称:");
+                    dialog.showAndWait().ifPresent(name -> {
+                        selected.setName(name);
+                        schemeListView.refresh();
+                        saveAllSchemes();
+                    });
+                }
+            }
+        });
         Button newSchemeBtn = new Button("新建方案");
+        Button saveSchemeBtn = new Button("保存方案");
         Button deleteSchemeBtn = new Button("删除方案");
-        Button renameSchemeBtn = new Button("重命名方案");
-
+        // Button renameSchemeBtn = new Button("重命名方案");
+        Label tips = new Label("F2 记录当前鼠标位置;\nF8 启动/停止方案;\nF3 清空当前方案中的所有点记录");
+        saveSchemeBtn.setOnAction(event -> {
+            MouseScheme current = schemeListView.getSelectionModel().getSelectedItem();
+            if (current != null) {
+                current.setPoints(FXCollections.observableArrayList(points));
+            }
+            saveAllSchemes();
+            // 弹窗提示
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("保存方案");
+            alert.setHeaderText(null);
+            alert.setContentText("方案已保存成功！");
+            alert.showAndWait();
+            currentSchemeModified = false;
+        });
         newSchemeBtn.setOnAction(e -> {
             String name = "方案" + (schemes.size() + 1);
             MouseScheme ms = new MouseScheme(name, FXCollections.observableArrayList());
@@ -97,22 +162,23 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
                 saveAllSchemes();
             }
         });
+        //
+        // renameSchemeBtn.setOnAction(e -> {
+        //     MouseScheme selected = schemeListView.getSelectionModel().getSelectedItem();
+        //     if (selected != null) {
+        //         TextInputDialog dialog = new TextInputDialog(selected.getName());
+        //         dialog.setTitle("重命名方案");
+        //         dialog.setHeaderText(null);
+        //         dialog.setContentText("名称:");
+        //         dialog.showAndWait().ifPresent(selected::setName);
+        //         schemeListView.refresh();
+        //         saveAllSchemes();
+        //     }
+        // });
 
-        renameSchemeBtn.setOnAction(e -> {
-            MouseScheme selected = schemeListView.getSelectionModel().getSelectedItem();
-            if (selected != null) {
-                TextInputDialog dialog = new TextInputDialog(selected.getName());
-                dialog.setTitle("重命名方案");
-                dialog.setHeaderText(null);
-                dialog.setContentText("名称:");
-                dialog.showAndWait().ifPresent(selected::setName);
-                schemeListView.refresh();
-                saveAllSchemes();
-            }
-        });
-
-        VBox schemeBox = new VBox(5, schemeListView, newSchemeBtn, deleteSchemeBtn, renameSchemeBtn);
-
+        VBox schemeBox = new VBox(5, schemeListView, newSchemeBtn,saveSchemeBtn, deleteSchemeBtn,tips);
+        schemeBox.setPadding(new Insets(10)); // 四周空白
+        schemeBox.setStyle("-fx-background-color: #f4f4f4;"); // 可选，设置背景颜色
         // 表格
         table = new TableView<>(points);
         table.setEditable(true);
@@ -175,7 +241,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
 
         Button runBtn = new Button("执行/停止方案(F8)");
         Button deletePointBtn = new Button("删除选中点");
-        Button clearPointsBtn = new Button("清空所有点");
+        Button clearPointsBtn = new Button("清空所有点(F3)");
 
         runBtn.setOnAction(e -> runScheme());
         deletePointBtn.setOnAction(e -> {
@@ -207,9 +273,10 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         }
 
         points.addListener((javafx.collections.ListChangeListener<ClickPoint>) c -> {
-            MouseScheme current = schemeListView.getSelectionModel().getSelectedItem();
-            if (current != null) current.setPoints(FXCollections.observableArrayList(points));
-            saveAllSchemes();
+            // MouseScheme current = schemeListView.getSelectionModel().getSelectedItem();
+            // if (current != null) current.setPoints(FXCollections.observableArrayList(points));
+            // saveAllSchemes();
+            currentSchemeModified = true; // 标记当前方案已修改
         });
     }
 
@@ -347,6 +414,11 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
 
     @Override
     public void stop() throws Exception {
+        MouseScheme current = schemeListView.getSelectionModel().getSelectedItem();
+        if (current != null) {
+            current.setPoints(FXCollections.observableArrayList(points));
+        }
+        saveAllSchemes();
         GlobalScreen.unregisterNativeHook();
         super.stop();
     }
