@@ -193,7 +193,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         //     }
         // });
 
-        VBox schemeBox = new VBox(5, schemeListView, newSchemeBtn, saveSchemeBtn, deleteSchemeBtn, tips);
+        VBox schemeBox = new VBox(5, schemeListView, newSchemeBtn,saveSchemeBtn, deleteSchemeBtn,tips);
         schemeBox.setPadding(new Insets(10)); // 四周空白
         schemeBox.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #ccc; -fx-border-radius: 8; -fx-background-radius: 8;");
         // 表格
@@ -295,10 +295,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
             btn.setOnMouseExited(e -> btn.setStyle("-fx-font-size: 14px; -fx-background-color: #4CAF50; -fx-text-fill: white; -fx-background-radius: 5;"));
         }
 
-        runBtn.setOnAction(e -> {
-            saveAllSchemes();
-            runScheme();
-        });
+        runBtn.setOnAction(e -> runScheme());
         deletePointBtn.setOnAction(e -> {
             ClickPoint selected = table.getSelectionModel().getSelectedItem();
             if (selected != null) points.remove(selected);
@@ -399,8 +396,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
                 return;
             }
 
-            List<MouseScheme> list = JSON.parseObject(content, new TypeReference<List<MouseScheme>>() {
-            });
+            List<MouseScheme> list = JSON.parseObject(content, new TypeReference<List<MouseScheme>>() {});
             schemes.clear();
             // 转成 ObservableList 并绑定
             for (MouseScheme ms : list) {
@@ -421,9 +417,13 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
     }
 
     private void runScheme() {
+        // 先保存当前方案
+
         MouseScheme current = schemeListView.getSelectionModel().getSelectedItem();
         if (current == null || current.getPoints().isEmpty()) return;
-
+        current.setPoints(FXCollections.observableArrayList(points));
+        saveAllSchemes();
+        appendLog("当前方案已保存");
         // 复制当前方案点列表，保证执行时不受外部修改影响
         List<ClickPoint> pointsToRun = new ArrayList<>();
         for (ClickPoint p : current.getPoints()) {
@@ -554,20 +554,13 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         } else if (e.getKeyCode() == NativeKeyEvent.VC_F3) {
             Platform.runLater(points::clear);
         } else if (e.getKeyCode() == NativeKeyEvent.VC_F8) {
-            if (!running) {
-                saveAllSchemes();
-                runScheme();
-            } else {
-                running = false;
-            };
+            if (!running) runScheme();
+            else running = false;
         }
     }
 
     @Override
-    public void nativeKeyReleased(NativeKeyEvent e) {
-    }
-
+    public void nativeKeyReleased(NativeKeyEvent e) {}
     @Override
-    public void nativeKeyTyped(NativeKeyEvent e) {
-    }
+    public void nativeKeyTyped(NativeKeyEvent e) {}
 }
