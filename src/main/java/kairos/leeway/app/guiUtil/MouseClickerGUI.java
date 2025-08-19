@@ -64,12 +64,12 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
 
         TableColumn<ClickPoint, Integer> xCol = new TableColumn<>("X");
         xCol.setCellValueFactory(data -> data.getValue().xProperty().asObject());
-        xCol.setCellFactory(TextFieldTableCell.forTableColumn(new javafx.util.converter.IntegerStringConverter()));
+        xCol.setCellFactory(col -> createEditingCell(new javafx.util.converter.IntegerStringConverter()));
         xCol.setOnEditCommit(event -> event.getRowValue().setX(event.getNewValue()));
 
         TableColumn<ClickPoint, Integer> yCol = new TableColumn<>("Y");
         yCol.setCellValueFactory(data -> data.getValue().yProperty().asObject());
-        yCol.setCellFactory(TextFieldTableCell.forTableColumn(new javafx.util.converter.IntegerStringConverter()));
+        yCol.setCellFactory(col -> createEditingCell(new javafx.util.converter.IntegerStringConverter()));
         yCol.setOnEditCommit(event -> event.getRowValue().setY(event.getNewValue()));
 
         TableColumn<ClickPoint, String> buttonCol = new TableColumn<>("按键");
@@ -79,12 +79,12 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
 
         TableColumn<ClickPoint, Integer> moveDelayCol = new TableColumn<>("移动延时(ms)");
         moveDelayCol.setCellValueFactory(data -> data.getValue().moveDelayProperty().asObject());
-        moveDelayCol.setCellFactory(TextFieldTableCell.forTableColumn(new javafx.util.converter.IntegerStringConverter()));
+        moveDelayCol.setCellFactory(col -> createEditingCell(new javafx.util.converter.IntegerStringConverter()));
         moveDelayCol.setOnEditCommit(event -> event.getRowValue().setMoveDelay(event.getNewValue()));
 
         TableColumn<ClickPoint, Integer> clickDelayCol = new TableColumn<>("点击延时(ms)");
         clickDelayCol.setCellValueFactory(data -> data.getValue().clickDelayProperty().asObject());
-        clickDelayCol.setCellFactory(TextFieldTableCell.forTableColumn(new javafx.util.converter.IntegerStringConverter()));
+        clickDelayCol.setCellFactory(col -> createEditingCell(new javafx.util.converter.IntegerStringConverter()));
         clickDelayCol.setOnEditCommit(event -> event.getRowValue().setClickDelay(event.getNewValue()));
 
         TableColumn<ClickPoint, Boolean> doClickCol = new TableColumn<>("是否点击");
@@ -150,7 +150,25 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         stage.setTitle("鼠标点击器");
         stage.show();
     }
-
+    // 工具方法：失焦时也提交
+    private <T> TextFieldTableCell<ClickPoint, T> createEditingCell(javafx.util.StringConverter<T> converter) {
+        TextFieldTableCell<ClickPoint, T> cell = new TextFieldTableCell(converter) {
+            @Override
+            public void startEdit() {
+                super.startEdit();
+                if (getGraphic() instanceof TextField) {
+                    TextField textField = (TextField) getGraphic();
+                    textField.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
+                        if (!isNowFocused) {
+                            // 失去焦点时强制提交
+                            commitEdit(converter.fromString(textField.getText()));
+                        }
+                    });
+                }
+            }
+        };
+        return cell;
+    }
     @Override
     public void stop() throws Exception {
         GlobalScreen.unregisterNativeHook();
