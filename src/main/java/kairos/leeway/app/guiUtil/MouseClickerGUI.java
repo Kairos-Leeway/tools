@@ -214,6 +214,9 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         TableColumn<ClickPoint, String> buttonCol = new TableColumn<>("按键");
         buttonCol.setCellValueFactory(data -> data.getValue().buttonProperty());
         buttonCol.setCellFactory(ComboBoxTableCell.forTableColumn("LEFT", "RIGHT"));
+        buttonCol.setStyle(
+                "-fx-font-size: 13px; -fx-alignment: CENTER; -fx-padding: 0 5 0 5;"
+        );
         buttonCol.setOnEditCommit(event -> event.getRowValue().setButton(event.getNewValue()));
 
         TableColumn<ClickPoint, Integer> moveDelayCol = new TableColumn<>("移动延时(ms)");
@@ -233,10 +236,35 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
 
         TableColumn<ClickPoint, Boolean> doClickCol = new TableColumn<>("是否点击");
         doClickCol.setCellValueFactory(data -> data.getValue().doClickProperty());
-        doClickCol.setCellFactory(CheckBoxTableCell.forTableColumn(doClickCol));
+        doClickCol.setCellFactory(col -> {
+            CheckBoxTableCell<ClickPoint, Boolean> cell = new CheckBoxTableCell<>();
+            cell.setStyle("-fx-alignment: CENTER;");
+            return cell;
+        });
         doClickCol.setEditable(true);
 
         table.getColumns().addAll(xCol, yCol, buttonCol, moveDelayCol, keepDelayCol, clickDelayCol, doClickCol);
+        table.setStyle(
+                "-fx-font-size: 13px;" +             // 字体大小
+                        "-fx-background-color: #f9f9f9;" +   // 背景颜色
+                        "-fx-border-color: #ccc;" +          // 边框颜色
+                        "-fx-border-radius: 5;" +            // 圆角边框
+                        "-fx-table-cell-border-color: #ddd;" // 单元格分割线
+        );
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setFixedCellSize(28);
+        for (TableColumn<ClickPoint, ?> col : table.getColumns()) {
+            col.setStyle("-fx-alignment: CENTER; -fx-font-size: 13px;"); // 内容居中
+        }
+
+        table.setRowFactory(tv -> {
+            TableRow<ClickPoint> row = new TableRow<>();
+            row.selectedProperty().addListener((obs, wasSelected, isNowSelected) -> {
+                if (isNowSelected) row.setStyle("-fx-background-color: #ff9357;");
+                else row.setStyle("-fx-background-color: transparent;");
+            });
+            return row;
+        });
 
         // 循环模式
         loopModeBox = new ComboBox<>();
@@ -294,7 +322,8 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         logArea.setStyle("-fx-font-family: Consolas; -fx-font-size: 12px; -fx-control-inner-background: #1e1e1e; -fx-text-fill: #f0f0f0;");
         BorderPane root = new BorderPane();
         root.setLeft(schemeBox);
-        VBox centerBox = new VBox(5, table, controls, logArea);
+        VBox centerBox = new VBox(10, table, controls, logArea);
+        centerBox.setPadding(new Insets(10));
         root.setCenter(centerBox);
         root.setStyle("-fx-background-color: #fafafa;");
         stage.setScene(new Scene(root, 1300, 600));
@@ -474,6 +503,12 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
 
     private <T> TextFieldTableCell<ClickPoint, T> createEditingCell(javafx.util.StringConverter<T> converter) {
         TextFieldTableCell<ClickPoint, T> cell = new TextFieldTableCell<>(converter);
+        cell.setStyle(
+                "-fx-background-radius: 5;" +
+                        "-fx-border-radius: 5;" +
+                        "-fx-padding: 0 5 0 5;" +
+                        "-fx-font-size: 13px;"
+        );
         cell.focusedProperty().addListener((obs, oldVal, newVal) -> {
             if (!newVal) {
                 cell.commitEdit(cell.getConverter().fromString(cell.getText()));
