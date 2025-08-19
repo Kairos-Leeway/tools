@@ -82,6 +82,11 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         moveDelayCol.setCellFactory(col -> createEditingCell(new javafx.util.converter.IntegerStringConverter()));
         moveDelayCol.setOnEditCommit(event -> event.getRowValue().setMoveDelay(event.getNewValue()));
 
+        TableColumn<ClickPoint, Integer> keepDelayCol = new TableColumn<>("按住延时(ms)");
+        keepDelayCol.setCellValueFactory(data -> data.getValue().keepDelayProperty().asObject());
+        keepDelayCol.setCellFactory(col -> createEditingCell(new javafx.util.converter.IntegerStringConverter()));
+        keepDelayCol.setOnEditCommit(event -> event.getRowValue().setKeepDelay(event.getNewValue()));
+
         TableColumn<ClickPoint, Integer> clickDelayCol = new TableColumn<>("点击延时(ms)");
         clickDelayCol.setCellValueFactory(data -> data.getValue().clickDelayProperty().asObject());
         clickDelayCol.setCellFactory(col -> createEditingCell(new javafx.util.converter.IntegerStringConverter()));
@@ -92,7 +97,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         doClickCol.setCellFactory(CheckBoxTableCell.forTableColumn(doClickCol));
         doClickCol.setEditable(true);
 
-        table.getColumns().addAll(xCol, yCol, buttonCol, moveDelayCol, clickDelayCol, doClickCol);
+        table.getColumns().addAll(xCol, yCol, buttonCol, moveDelayCol,keepDelayCol, clickDelayCol, doClickCol);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         Label recordLabel = new Label("F2 记录鼠标位置");
@@ -180,7 +185,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
     public void nativeKeyPressed(NativeKeyEvent e) {
         if (e.getKeyCode() == NativeKeyEvent.VC_F2) {
             Point p = MouseInfo.getPointerInfo().getLocation();
-            Platform.runLater(() -> points.add(new ClickPoint(p.x, p.y, "LEFT", 0, 100, true)));
+            Platform.runLater(() -> points.add(new ClickPoint(p.x, p.y, "LEFT", 500, 100, 100, true)));
             appendLog("添加点: X=" + p.x + " Y=" + p.y);
         } else if (e.getKeyCode() == NativeKeyEvent.VC_F3) {
             Platform.runLater(points::clear);
@@ -290,6 +295,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
                             int mask = p.getButton().equalsIgnoreCase("LEFT") ?
                                     InputEvent.BUTTON1_DOWN_MASK : InputEvent.BUTTON3_DOWN_MASK;
                             robot.mousePress(mask);
+                            robot.delay(p.getKeepDelay());
                             robot.mouseRelease(mask);
                         }
 
