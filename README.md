@@ -34,6 +34,6 @@
 
 ---
 ## 下载
-- [下载 Clicker](./apps/Clicker.exe)
+- <a href="./apps/Clicker.exe" download style="padding:8px 12px; background:#4CAF50; color:white; text-decoration:none; border-radius:4px;">下载 Mouse Clicker</a>
 - exe由exe4j打包成exe, 下载即用, 免安装
 - 建议将软件放在单独文件夹下, 生成桌面快捷方式, 程序启动会生成配置文件, 避免误删除或丢失
