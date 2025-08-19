@@ -152,12 +152,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
                 current.setPoints(FXCollections.observableArrayList(points));
             }
             saveAllSchemes();
-            // 弹窗提示
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle("保存方案");
-            alert.setHeaderText(null);
-            alert.setContentText("方案已保存成功！");
-            alert.showAndWait();
+            appendLog("方案已保存成功");
             currentSchemeModified = false;
         });
         newSchemeBtn.setOnAction(e -> {
