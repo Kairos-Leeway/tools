@@ -4,18 +4,16 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.TypeReference;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.scene.Scene;
+import javafx.scene.control.*;
 import javafx.scene.control.Button;
-import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.Separator;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
-import javafx.scene.control.ToolBar;
 import javafx.scene.control.cell.ComboBoxTableCell;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.VBox;
@@ -24,17 +22,10 @@ import javafx.stage.Stage;
 import org.jnativehook.GlobalScreen;
 import org.jnativehook.NativeHookException;
 import org.jnativehook.keyboard.NativeKeyEvent;
-import org.jnativehook.keyboard.NativeKeyListener;
 
 import java.awt.*;
 import java.awt.event.InputEvent;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.Reader;
-import java.io.Writer;
+import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
@@ -42,7 +33,7 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class MouseClickerGUI extends Application implements NativeKeyListener {
+public class MouseClickerGUI extends Application {
 
     private final ObservableList<ClickPoint> points = FXCollections.observableArrayList();
     private volatile boolean running = false;
@@ -63,7 +54,27 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         disableJNativeHookLogger();
         try {
             GlobalScreen.registerNativeHook();
-            GlobalScreen.addNativeKeyListener(this);
+            GlobalScreen.addNativeKeyListener(new org.jnativehook.keyboard.NativeKeyListener() {
+                @Override
+                public void nativeKeyPressed(NativeKeyEvent e) {
+                    if (e.getKeyCode() == NativeKeyEvent.VC_F2) {
+                        Point p = MouseInfo.getPointerInfo().getLocation();
+                        Platform.runLater(() -> points.add(new ClickPoint(p.x, p.y, "LEFT", 100, 50)));
+                        appendLog("添加点: X=" + p.x + " Y=" + p.y);
+                    } else if (e.getKeyCode() == NativeKeyEvent.VC_F3) {
+                        Platform.runLater(points::clear);
+                        appendLog("清空所有点");
+                    } else if (e.getKeyCode() == NativeKeyEvent.VC_F8) {
+                        if (!running) runScheme(); else {
+                            running = false;
+                            appendLog("停止执行方案");
+                        }
+                    }
+                }
+
+                @Override public void nativeKeyReleased(NativeKeyEvent e) {}
+                @Override public void nativeKeyTyped(NativeKeyEvent e) {}
+            });
         } catch (NativeHookException e) {
             e.printStackTrace();
         }
@@ -86,22 +97,26 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         buttonCol.setCellValueFactory(data -> data.getValue().buttonProperty());
         buttonCol.setCellFactory(ComboBoxTableCell.forTableColumn("LEFT", "RIGHT"));
 
-        TableColumn<ClickPoint, Integer> delayCol = new TableColumn<>("延时(ms)");
-        delayCol.setCellValueFactory(data -> data.getValue().delayProperty().asObject());
-        delayCol.setCellFactory(TextFieldTableCell.forTableColumn(new javafx.util.converter.IntegerStringConverter()));
-        delayCol.setOnEditCommit(event -> event.getRowValue().setDelay(event.getNewValue()));
+        TableColumn<ClickPoint, Integer> clickDelayCol = new TableColumn<>("点击延时(ms)");
+        clickDelayCol.setCellValueFactory(data -> data.getValue().clickDelayProperty().asObject());
+        clickDelayCol.setCellFactory(TextFieldTableCell.forTableColumn(new javafx.util.converter.IntegerStringConverter()));
+        clickDelayCol.setOnEditCommit(event -> event.getRowValue().setClickDelay(event.getNewValue()));
 
-        table.getColumns().addAll(xCol, yCol, buttonCol, delayCol);
+        TableColumn<ClickPoint, Integer> moveDelayCol = new TableColumn<>("移动延时(ms)");
+        moveDelayCol.setCellValueFactory(data -> data.getValue().moveDelayProperty().asObject());
+        moveDelayCol.setCellFactory(TextFieldTableCell.forTableColumn(new javafx.util.converter.IntegerStringConverter()));
+        moveDelayCol.setOnEditCommit(event -> event.getRowValue().setMoveDelay(event.getNewValue()));
+
+        table.getColumns().addAll(xCol, yCol, buttonCol, clickDelayCol, moveDelayCol);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         Label recordLabel = new Label("F2 记录鼠标位置");
-        // 按钮
+
         Button runBtn = new Button("执行/停止方案(F8)");
         Button saveBtn = new Button("保存方案");
         Button loadBtn = new Button("加载方案");
         Button clearBtn = new Button("清空方案");
 
-        // 循环模式与输入框
         loopModeBox = new ComboBox<>();
         loopModeBox.getItems().addAll("循环次数", "结束时间");
         loopModeBox.setValue("循环次数");
@@ -120,19 +135,15 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
             endTimeInput.setManaged(mode.equals("结束时间"));
         });
 
-
-
-        ToolBar toolbar = new ToolBar(recordLabel, runBtn, saveBtn, loadBtn, clearBtn, new Separator(),          // 分隔按钮和循环设置
-                new Label("循环模式:"), loopModeBox,new Separator(),
+        ToolBar toolbar = new ToolBar(recordLabel, runBtn, saveBtn, loadBtn, clearBtn, new Separator(),
+                new Label("循环模式:"), loopModeBox, new Separator(),
                 new Label("值:"), loopCountInput, endTimeInput,
                 new Label("间隔(ms):"), loopDelayField);
 
-        // 日志输出
         logArea = new TextArea();
         logArea.setEditable(false);
         logArea.setPrefHeight(150);
 
-        // 按钮事件
         runBtn.setOnAction(e -> runScheme());
         saveBtn.setOnAction(e -> saveScheme(stage));
         loadBtn.setOnAction(e -> loadScheme(stage));
@@ -150,30 +161,6 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         super.stop();
     }
 
-    // ====== 全局快捷键 ======
-    @Override
-    public void nativeKeyPressed(NativeKeyEvent e) {
-        if (e.getKeyCode() == NativeKeyEvent.VC_F2) {
-            Point p = MouseInfo.getPointerInfo().getLocation();
-            Platform.runLater(() -> points.add(new ClickPoint(p.x, p.y, "LEFT", 1000)));
-            appendLog("添加点: X=" + p.x + " Y=" + p.y);
-        } else if (e.getKeyCode() == NativeKeyEvent.VC_F3) {
-            Platform.runLater(points::clear);
-            appendLog("清空所有点");
-        } else if (e.getKeyCode() == NativeKeyEvent.VC_F8) {
-            if (!running) {
-                runScheme();
-            } else {
-                running = false;
-                appendLog("停止执行方案");
-            }
-        }
-    }
-
-    @Override public void nativeKeyReleased(NativeKeyEvent e) {}
-    @Override public void nativeKeyTyped(NativeKeyEvent e) {}
-
-    // ====== 保存/加载方案 ======
     private void saveScheme(Stage stage) {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("保存方案");
@@ -212,7 +199,6 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         }
     }
 
-    // ====== 执行方案 ======
     private void runScheme() {
         if (points.isEmpty()) return;
         running = true;
@@ -250,6 +236,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         int finalLoopCount = loopCount;
         long finalEndMillis = endMillis;
         int finalLoopDelay = loopDelay;
+
         new Thread(() -> {
             try {
                 Robot robot = new Robot();
@@ -259,23 +246,25 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
                     for (ClickPoint p : points) {
                         if (!running) break;
 
+                        if (p.getMoveDelay() > 0) Thread.sleep(p.getMoveDelay()); // 等待移动延时
                         robot.mouseMove(p.getX(), p.getY());
-                        int mask = p.getButton().equalsIgnoreCase("LEFT") ?
-                                InputEvent.BUTTON1_DOWN_MASK : InputEvent.BUTTON3_DOWN_MASK;
+
+                        if (p.getClickDelay() > 0) Thread.sleep(p.getClickDelay()); // 等待点击延时
+                        int mask = p.getButton().equalsIgnoreCase("LEFT") ? InputEvent.BUTTON1_DOWN_MASK : InputEvent.BUTTON3_DOWN_MASK;
                         robot.mousePress(mask);
                         robot.mouseRelease(mask);
 
-                        appendLog(String.format("点击点 X=%d Y=%d 按键=%s 延时=%dms",
-                                p.getX(), p.getY(), p.getButton(), p.getDelay()));
+                        appendLog(String.format("点击点 X=%d Y=%d 按键=%s 移动延时=%dms 点击延时=%dms",
+                                p.getX(), p.getY(), p.getButton(), p.getMoveDelay(), p.getClickDelay()));
 
-                        Thread.sleep(p.getDelay());
+                        Thread.sleep(p.getClickDelay());
                     }
 
                     currentLoop++;
+                    if (finalLoopDelay > 0) Thread.sleep(finalLoopDelay);
 
                     if (finalLoopCount > 0 && currentLoop >= finalLoopCount) break;
                     if (finalEndMillis > 0 && System.currentTimeMillis() >= finalEndMillis) break;
-                    if (finalLoopDelay > 0) Thread.sleep(finalLoopDelay);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -287,7 +276,6 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         }).start();
     }
 
-    // ====== 日志输出 ======
     private void appendLog(String text) {
         Platform.runLater(() -> {
             String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
@@ -296,11 +284,46 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         });
     }
 
-    // ====== 屏蔽 JNativeHook 日志 ======
     private void disableJNativeHookLogger() {
         Logger logger = Logger.getLogger(GlobalScreen.class.getPackage().getName());
         logger.setLevel(Level.OFF);
         logger.setUseParentHandlers(false);
     }
 
+    // ======= ClickPoint 类 =======
+    public static class ClickPoint {
+        private final IntegerProperty x = new SimpleIntegerProperty();
+        private final IntegerProperty y = new SimpleIntegerProperty();
+        private final javafx.beans.property.SimpleStringProperty button = new javafx.beans.property.SimpleStringProperty();
+        private final IntegerProperty clickDelay = new SimpleIntegerProperty();
+        private final IntegerProperty moveDelay = new SimpleIntegerProperty();
+
+        public ClickPoint(int x, int y, String button, int clickDelay, int moveDelay) {
+            this.x.set(x);
+            this.y.set(y);
+            this.button.set(button);
+            this.clickDelay.set(clickDelay);
+            this.moveDelay.set(moveDelay);
+        }
+
+        public int getX() { return x.get(); }
+        public void setX(int value) { x.set(value); }
+        public IntegerProperty xProperty() { return x; }
+
+        public int getY() { return y.get(); }
+        public void setY(int value) { y.set(value); }
+        public IntegerProperty yProperty() { return y; }
+
+        public String getButton() { return button.get(); }
+        public void setButton(String value) { button.set(value); }
+        public javafx.beans.property.SimpleStringProperty buttonProperty() { return button; }
+
+        public int getClickDelay() { return clickDelay.get(); }
+        public void setClickDelay(int value) { clickDelay.set(value); }
+        public IntegerProperty clickDelayProperty() { return clickDelay; }
+
+        public int getMoveDelay() { return moveDelay.get(); }
+        public void setMoveDelay(int value) { moveDelay.set(value); }
+        public IntegerProperty moveDelayProperty() { return moveDelay; }
+    }
 }
