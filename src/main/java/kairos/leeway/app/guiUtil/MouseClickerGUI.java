@@ -101,7 +101,16 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         Button saveBtn = new Button("保存方案");
         Button loadBtn = new Button("加载方案");
         Button clearBtn = new Button("清空方案");
-
+        Button deleteBtn = new Button("删除选中");
+        deleteBtn.setOnAction(e -> {
+            ClickPoint selected = table.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                points.remove(selected);
+                appendLog("删除点: X=" + selected.getX() + " Y=" + selected.getY());
+            } else {
+                appendLog("未选择任何点进行删除");
+            }
+        });
         loopModeBox = new ComboBox<>();
         loopModeBox.getItems().addAll("循环次数", "结束时间");
         loopModeBox.setValue("循环次数");
@@ -121,7 +130,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         });
 
         ToolBar toolbar = new ToolBar(
-                recordLabel, runBtn, saveBtn, loadBtn, clearBtn, new Separator(),
+                recordLabel, runBtn, saveBtn, loadBtn,deleteBtn, clearBtn, new Separator(),
                 new Label("循环模式:"), loopModeBox, new Separator(),
                 new Label("值:"), loopCountInput, endTimeInput,
                 new Label("循环间隔(ms):"), loopDelayField
@@ -136,8 +145,8 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         loadBtn.setOnAction(e -> loadScheme(stage));
         clearBtn.setOnAction(e -> points.clear());
 
-        VBox root = new VBox(10, table, toolbar, logArea);
-        stage.setScene(new Scene(root, 1250, 500));
+        VBox root = new VBox(1, table, toolbar, logArea);
+        stage.setScene(new Scene(root, 1350, 500));
         stage.setTitle("鼠标点击器");
         stage.show();
     }
@@ -211,7 +220,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         if (points.isEmpty()) return;
         running = true;
 
-        int loopCount = 1;
+        int loopCount = 0;
         long endMillis = 0;
         int loopDelay = 1000;
 
@@ -226,6 +235,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
                 String endTimeText = endTimeInput.getText().trim();
                 if (!endTimeText.isEmpty()) {
                     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                    System.out.println(endTimeText);
                     Date endDate = sdf.parse(endTimeText);
                     Calendar now = Calendar.getInstance();
                     Calendar endCal = Calendar.getInstance();
@@ -273,7 +283,6 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
                     currentLoop++;
                     if (finalLoopCount > 0 && currentLoop >= finalLoopCount) break;
                     if (finalEndMillis > 0 && System.currentTimeMillis() >= finalEndMillis) break;
-
                     if (finalLoopDelay > 0) Thread.sleep(finalLoopDelay);
                 }
             } catch (Exception e) {
