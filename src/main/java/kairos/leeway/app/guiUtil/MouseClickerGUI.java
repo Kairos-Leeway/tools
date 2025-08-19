@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.TypeReference;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.beans.property.*;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.scene.Scene;
@@ -12,9 +13,13 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
-import javafx.scene.control.cell.*;
+import javafx.scene.control.cell.CheckBoxTableCell;
+import javafx.scene.control.cell.ComboBoxTableCell;
+import javafx.scene.control.cell.TextFieldTableCell;
+import javafx.scene.input.MouseButton;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import org.jnativehook.GlobalScreen;
 import org.jnativehook.NativeHookException;
@@ -32,17 +37,17 @@ import java.util.logging.Logger;
 
 public class MouseClickerGUI extends Application implements NativeKeyListener {
 
-
-
     private final ObservableList<ClickPoint> points = FXCollections.observableArrayList();
+    private final ObservableList<MouseScheme> schemes = FXCollections.observableArrayList();
     private volatile boolean running = false;
 
     private TableView<ClickPoint> table;
-    private TextField loopCountInput;
-    private TextField loopDelayField;
-    private TextField endTimeInput;
+    private TextField loopCountInput, loopDelayField, endTimeInput;
     private ComboBox<String> loopModeBox;
     private TextArea logArea;
+    private ListView<MouseScheme> schemeListView;
+
+    private File schemesFile = new File("schemes.json");
 
     public static void main(String[] args) {
         launch(args);
@@ -58,9 +63,60 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
             e.printStackTrace();
         }
 
+        // 加载方案
+        loadAllSchemes();
+
+        schemeListView = new ListView<>(schemes);
+        schemeListView.setPrefWidth(180);
+        schemeListView.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                points.setAll(FXCollections.observableArrayList(newVal.getPoints()));
+            }
+        });
+
+        Button newSchemeBtn = new Button("新建方案");
+        Button deleteSchemeBtn = new Button("删除方案");
+        Button renameSchemeBtn = new Button("重命名方案");
+
+        newSchemeBtn.setOnAction(e -> {
+            String name = "方案" + (schemes.size() + 1);
+            MouseScheme ms = new MouseScheme(name, FXCollections.observableArrayList());
+            schemes.add(ms);
+            schemeListView.getSelectionModel().select(ms);
+            saveAllSchemes();
+        });
+
+        deleteSchemeBtn.setOnAction(e -> {
+            MouseScheme selected = schemeListView.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                int idx = schemeListView.getSelectionModel().getSelectedIndex();
+                schemes.remove(selected);
+                if (!schemes.isEmpty()) {
+                    schemeListView.getSelectionModel().select(idx > 0 ? idx - 1 : 0);
+                }
+                saveAllSchemes();
+            }
+        });
+
+        renameSchemeBtn.setOnAction(e -> {
+            MouseScheme selected = schemeListView.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                TextInputDialog dialog = new TextInputDialog(selected.getName());
+                dialog.setTitle("重命名方案");
+                dialog.setHeaderText(null);
+                dialog.setContentText("名称:");
+                dialog.showAndWait().ifPresent(selected::setName);
+                schemeListView.refresh();
+                saveAllSchemes();
+            }
+        });
+
+        VBox schemeBox = new VBox(5, schemeListView, newSchemeBtn, deleteSchemeBtn, renameSchemeBtn);
+
         // 表格
         table = new TableView<>(points);
         table.setEditable(true);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         TableColumn<ClickPoint, Integer> xCol = new TableColumn<>("X");
         xCol.setCellValueFactory(data -> data.getValue().xProperty().asObject());
@@ -97,29 +153,12 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         doClickCol.setCellFactory(CheckBoxTableCell.forTableColumn(doClickCol));
         doClickCol.setEditable(true);
 
-        table.getColumns().addAll(xCol, yCol, buttonCol, moveDelayCol,keepDelayCol, clickDelayCol, doClickCol);
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.getColumns().addAll(xCol, yCol, buttonCol, moveDelayCol, keepDelayCol, clickDelayCol, doClickCol);
 
-        Label recordLabel = new Label("F2 记录鼠标位置");
-
-        Button runBtn = new Button("执行/停止方案(F8)");
-        Button saveBtn = new Button("保存方案");
-        Button loadBtn = new Button("加载方案");
-        Button clearBtn = new Button("清空方案");
-        Button deleteBtn = new Button("删除选中");
-        deleteBtn.setOnAction(e -> {
-            ClickPoint selected = table.getSelectionModel().getSelectedItem();
-            if (selected != null) {
-                points.remove(selected);
-                appendLog("删除点: X=" + selected.getX() + " Y=" + selected.getY());
-            } else {
-                appendLog("未选择任何点进行删除");
-            }
-        });
+        // 循环模式
         loopModeBox = new ComboBox<>();
         loopModeBox.getItems().addAll("循环次数", "结束时间");
         loopModeBox.setValue("循环次数");
-
         loopCountInput = new TextField("1");
         endTimeInput = new TextField(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
         endTimeInput.setVisible(false);
@@ -134,111 +173,81 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
             endTimeInput.setManaged(mode.equals("结束时间"));
         });
 
-        ToolBar toolbar = new ToolBar(
-                recordLabel, runBtn, saveBtn, loadBtn,deleteBtn, clearBtn, new Separator(),
-                new Label("循环模式:"), loopModeBox, new Separator(),
-                new Label("值:"), loopCountInput, endTimeInput,
-                new Label("循环间隔(ms):"), loopDelayField
-        );
+        Button runBtn = new Button("执行/停止方案(F8)");
+        Button deletePointBtn = new Button("删除选中点");
+        Button clearPointsBtn = new Button("清空所有点");
+
+        runBtn.setOnAction(e -> runScheme());
+        deletePointBtn.setOnAction(e -> {
+            ClickPoint selected = table.getSelectionModel().getSelectedItem();
+            if (selected != null) points.remove(selected);
+        });
+        clearPointsBtn.setOnAction(e -> points.clear());
+
+        HBox controls = new HBox(5, runBtn, deletePointBtn, clearPointsBtn,
+                new Label("循环模式:"), loopModeBox, new Label("值:"), loopCountInput, endTimeInput,
+                new Label("循环间隔(ms):"), loopDelayField);
 
         logArea = new TextArea();
         logArea.setEditable(false);
         logArea.setPrefHeight(150);
 
-        runBtn.setOnAction(e -> runScheme());
-        saveBtn.setOnAction(e -> saveScheme(stage));
-        loadBtn.setOnAction(e -> loadScheme(stage));
-        clearBtn.setOnAction(e -> points.clear());
+        BorderPane root = new BorderPane();
+        root.setLeft(schemeBox);
+        VBox centerBox = new VBox(5, table, controls, logArea);
+        root.setCenter(centerBox);
 
-        VBox root = new VBox(1, table, toolbar, logArea);
-        stage.setScene(new Scene(root, 1350, 500));
+        stage.setScene(new Scene(root, 1200, 600));
         stage.setTitle("鼠标点击器");
         stage.show();
-    }
-    // 工具方法：失焦时也提交
-    private <T> TextFieldTableCell<ClickPoint, T> createEditingCell(javafx.util.StringConverter<T> converter) {
-        TextFieldTableCell<ClickPoint, T> cell = new TextFieldTableCell(converter) {
-            @Override
-            public void startEdit() {
-                super.startEdit();
-                if (getGraphic() instanceof TextField) {
-                    TextField textField = (TextField) getGraphic();
-                    textField.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
-                        if (!isNowFocused) {
-                            // 失去焦点时强制提交
-                            commitEdit(converter.fromString(textField.getText()));
-                        }
-                    });
-                }
-            }
-        };
-        return cell;
-    }
-    @Override
-    public void stop() throws Exception {
-        GlobalScreen.unregisterNativeHook();
-        super.stop();
-    }
 
-    // ====== 全局快捷键 ======
-    @Override
-    public void nativeKeyPressed(NativeKeyEvent e) {
-        if (e.getKeyCode() == NativeKeyEvent.VC_F2) {
-            Point p = MouseInfo.getPointerInfo().getLocation();
-            Platform.runLater(() -> points.add(new ClickPoint(p.x, p.y, "LEFT", 500, 100, 100, true)));
-            appendLog("添加点: X=" + p.x + " Y=" + p.y);
-        } else if (e.getKeyCode() == NativeKeyEvent.VC_F3) {
-            Platform.runLater(points::clear);
-            appendLog("清空所有点");
-        } else if (e.getKeyCode() == NativeKeyEvent.VC_F8) {
-            if (!running) runScheme();
-            else {
-                running = false;
-                appendLog("停止执行方案");
-            }
+        if (!schemes.isEmpty()) {
+            schemeListView.getSelectionModel().select(0);
+            points.setAll(schemeListView.getSelectionModel().getSelectedItem().getPoints());
         }
-    }
-    @Override public void nativeKeyReleased(NativeKeyEvent e) {}
-    @Override public void nativeKeyTyped(NativeKeyEvent e) {}
 
-    // ====== 保存/加载方案 ======
-    private void saveScheme(Stage stage) {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("保存方案");
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON 文件", "*.json"));
-        fileChooser.setInitialFileName("scheme.json");
-        File file = fileChooser.showSaveDialog(stage);
-        if (file == null) return;
-        try (Writer writer = new OutputStreamWriter(new FileOutputStream(file), "UTF-8")) {
-            writer.write(JSON.toJSONString(points));
-            appendLog("方案已保存到: " + file.getAbsolutePath());
+        points.addListener((javafx.collections.ListChangeListener<ClickPoint>) c -> {
+            MouseScheme current = schemeListView.getSelectionModel().getSelectedItem();
+            if (current != null) current.setPoints(FXCollections.observableArrayList(points));
+            saveAllSchemes();
+        });
+    }
+
+    // MouseClickerGUI.java 加载方案部分
+    private void loadAllSchemes() {
+        if (!schemesFile.exists()) {
+            schemes.clear();
+            return;
+        }
+        try (Reader reader = new InputStreamReader(new FileInputStream(schemesFile), "UTF-8")) {
+            char[] buf = new char[(int) schemesFile.length()];
+            reader.read(buf);
+            String content = new String(buf);
+            if (content.trim().isEmpty()) {
+                schemes.clear();
+                return;
+            }
+
+            List<MouseScheme> list = JSON.parseObject(content, new TypeReference<List<MouseScheme>>() {});
+            schemes.clear();
+            // 转成 ObservableList 并绑定
+            for (MouseScheme ms : list) {
+                ms.setPoints(new ArrayList<>(ms.getPoints())); // 确保不为 null
+                schemes.add(ms);
+            }
         } catch (Exception e) {
             e.printStackTrace();
-            appendLog("保存失败: " + e.getMessage());
         }
     }
 
-    private void loadScheme(Stage stage) {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("加载方案");
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON 文件", "*.json"));
-        File file = fileChooser.showOpenDialog(stage);
-        if (file == null) return;
-        try (Reader reader = new InputStreamReader(new FileInputStream(file), "UTF-8")) {
-            StringBuilder sb = new StringBuilder();
-            char[] buf = new char[1024];
-            int len;
-            while ((len = reader.read(buf)) != -1) sb.append(buf, 0, len);
-            List<ClickPoint> loaded = JSON.parseObject(sb.toString(), new TypeReference<List<ClickPoint>>() {});
-            points.setAll(loaded);
-            appendLog("方案已加载: " + file.getAbsolutePath());
+    private void saveAllSchemes() {
+        try (Writer writer = new OutputStreamWriter(new FileOutputStream(schemesFile), "UTF-8")) {
+            writer.write(JSON.toJSONString(schemes));
         } catch (Exception e) {
             e.printStackTrace();
-            appendLog("加载失败: " + e.getMessage());
         }
     }
 
-    // ====== 执行方案 ======
     private void runScheme() {
         if (points.isEmpty()) return;
         running = true;
@@ -258,17 +267,11 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
                 String endTimeText = endTimeInput.getText().trim();
                 if (!endTimeText.isEmpty()) {
                     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                    System.out.println(endTimeText);
                     Date endDate = sdf.parse(endTimeText);
-                    Calendar now = Calendar.getInstance();
-                    Calendar endCal = Calendar.getInstance();
-                    endCal.setTime(endDate);
-                    endCal.set(now.get(Calendar.YEAR), now.get(Calendar.MONTH), now.get(Calendar.DAY_OF_MONTH));
-                    endMillis = endCal.getTimeInMillis();
+                    endMillis = endDate.getTime();
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
             appendLog("参数解析错误：" + e.getMessage());
             running = false;
             return;
@@ -310,7 +313,6 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
                     if (finalLoopDelay > 0) Thread.sleep(finalLoopDelay);
                 }
             } catch (Exception e) {
-                e.printStackTrace();
                 appendLog("执行异常：" + e.getMessage());
             } finally {
                 running = false;
@@ -319,7 +321,16 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         }).start();
     }
 
-    // ====== 日志输出 ======
+    private <T> TextFieldTableCell<ClickPoint, T> createEditingCell(javafx.util.StringConverter<T> converter) {
+        TextFieldTableCell<ClickPoint, T> cell = new TextFieldTableCell<>(converter);
+        cell.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (!newVal) {
+                cell.commitEdit(cell.getConverter().fromString(cell.getText()));
+            }
+        });
+        return cell;
+    }
+
     private void appendLog(String text) {
         Platform.runLater(() -> {
             String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
@@ -328,10 +339,33 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         });
     }
 
-    // ====== 屏蔽 JNativeHook 日志 ======
     private void disableJNativeHookLogger() {
         Logger logger = Logger.getLogger(GlobalScreen.class.getPackage().getName());
         logger.setLevel(Level.OFF);
         logger.setUseParentHandlers(false);
     }
+
+    @Override
+    public void stop() throws Exception {
+        GlobalScreen.unregisterNativeHook();
+        super.stop();
+    }
+
+    @Override
+    public void nativeKeyPressed(NativeKeyEvent e) {
+        if (e.getKeyCode() == NativeKeyEvent.VC_F2) {
+            Point p = MouseInfo.getPointerInfo().getLocation();
+            Platform.runLater(() -> points.add(new ClickPoint(p.x, p.y, "LEFT", 500, 100, 100, true)));
+        } else if (e.getKeyCode() == NativeKeyEvent.VC_F3) {
+            Platform.runLater(points::clear);
+        } else if (e.getKeyCode() == NativeKeyEvent.VC_F8) {
+            if (!running) runScheme();
+            else running = false;
+        }
+    }
+
+    @Override
+    public void nativeKeyReleased(NativeKeyEvent e) {}
+    @Override
+    public void nativeKeyTyped(NativeKeyEvent e) {}
 }
