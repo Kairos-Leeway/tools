@@ -8,6 +8,7 @@ import javafx.beans.property.*;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.Button;
@@ -70,6 +71,11 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
 
         schemeListView = new ListView<>(schemes);
         schemeListView.setPrefWidth(180);
+        schemeListView.setPrefHeight(400);
+        schemeListView.setStyle(
+                "-fx-border-color: #ccc; -fx-border-radius: 5; -fx-background-radius: 5;" +
+                        "-fx-focus-color: #4CAF50; -fx-faint-focus-color: transparent;"
+        );
 
         schemeListView.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
             if (ignoreSchemeSelectionChange) return;
@@ -127,8 +133,19 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         Button newSchemeBtn = new Button("新建方案");
         Button saveSchemeBtn = new Button("保存方案");
         Button deleteSchemeBtn = new Button("删除方案");
+
+        Button[] sideButtons = {newSchemeBtn, saveSchemeBtn, deleteSchemeBtn};
+        for (Button btn : sideButtons) {
+            btn.setMinWidth(140);
+            btn.setStyle("-fx-font-size: 14px; -fx-background-color: #4CAF50; -fx-text-fill: white; -fx-background-radius: 5;");
+            btn.setOnMouseEntered(e -> btn.setStyle("-fx-font-size: 14px; -fx-background-color: #45a049; -fx-text-fill: white; -fx-background-radius: 5;"));
+            btn.setOnMouseExited(e -> btn.setStyle("-fx-font-size: 14px; -fx-background-color: #4CAF50; -fx-text-fill: white; -fx-background-radius: 5;"));
+        }
         // Button renameSchemeBtn = new Button("重命名方案");
         Label tips = new Label("F2 记录当前鼠标位置;\nF8 启动/停止方案;\nF3 清空当前方案中的所有点记录");
+        tips.setStyle("-fx-font-size: 13px; -fx-text-fill: #555;");
+        tips.setWrapText(true);
+        tips.setPadding(new Insets(5, 0, 0, 0));
         saveSchemeBtn.setOnAction(event -> {
             MouseScheme current = schemeListView.getSelectionModel().getSelectedItem();
             if (current != null) {
@@ -178,7 +195,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
 
         VBox schemeBox = new VBox(5, schemeListView, newSchemeBtn,saveSchemeBtn, deleteSchemeBtn,tips);
         schemeBox.setPadding(new Insets(10)); // 四周空白
-        schemeBox.setStyle("-fx-background-color: #f4f4f4;"); // 可选，设置背景颜色
+        schemeBox.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #ccc; -fx-border-radius: 8; -fx-background-radius: 8;");
         // 表格
         table = new TableView<>(points);
         table.setEditable(true);
@@ -242,6 +259,13 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         Button runBtn = new Button("执行/停止方案(F8)");
         Button deletePointBtn = new Button("删除选中点");
         Button clearPointsBtn = new Button("清空所有点(F3)");
+        Button[] bottomButtons = {runBtn, deletePointBtn, clearPointsBtn};
+        for (Button btn : bottomButtons) {
+            btn.setMinWidth(140);
+            btn.setStyle("-fx-font-size: 14px; -fx-background-color: #4CAF50; -fx-text-fill: white; -fx-background-radius: 5;");
+            btn.setOnMouseEntered(e -> btn.setStyle("-fx-font-size: 14px; -fx-background-color: #45a049; -fx-text-fill: white; -fx-background-radius: 5;"));
+            btn.setOnMouseExited(e -> btn.setStyle("-fx-font-size: 14px; -fx-background-color: #4CAF50; -fx-text-fill: white; -fx-background-radius: 5;"));
+        }
 
         runBtn.setOnAction(e -> runScheme());
         deletePointBtn.setOnAction(e -> {
@@ -250,20 +274,30 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         });
         clearPointsBtn.setOnAction(e -> points.clear());
 
-        HBox controls = new HBox(5, runBtn, deletePointBtn, clearPointsBtn,
-                new Label("循环模式:"), loopModeBox, new Label("值:"), loopCountInput, endTimeInput,
-                new Label("循环间隔(ms):"), loopDelayField);
+        Label loopDelayLabel = new Label("循环间隔(ms):");
+        loopDelayLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: #333;");
+
+        setStyle();
+
+        // 然后布局HBox时增加间距
+        HBox controls = new HBox(8, runBtn, deletePointBtn, clearPointsBtn,
+                loopModeBox, new Label(":"), loopCountInput, endTimeInput,
+                loopDelayLabel, loopDelayField);
+        controls.setPadding(new Insets(5));
+        controls.setStyle("-fx-background-color: #e8e8e8; -fx-border-radius: 5; -fx-background-radius: 5;");
+        controls.setPadding(new Insets(5));
+        controls.setAlignment(Pos.CENTER_LEFT); // 垂直居中
 
         logArea = new TextArea();
         logArea.setEditable(false);
         logArea.setPrefHeight(150);
-
+        logArea.setStyle("-fx-font-family: Consolas; -fx-font-size: 12px; -fx-control-inner-background: #1e1e1e; -fx-text-fill: #f0f0f0;");
         BorderPane root = new BorderPane();
         root.setLeft(schemeBox);
         VBox centerBox = new VBox(5, table, controls, logArea);
         root.setCenter(centerBox);
-
-        stage.setScene(new Scene(root, 1200, 600));
+        root.setStyle("-fx-background-color: #fafafa;");
+        stage.setScene(new Scene(root, 1300, 600));
         stage.setTitle("鼠标点击器");
         stage.show();
 
@@ -278,6 +312,44 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
             // saveAllSchemes();
             currentSchemeModified = true; // 标记当前方案已修改
         });
+    }
+
+    private void setStyle() {
+        // 假设按钮高度为28
+        double controlHeight = 28;
+
+        // 循环模式下拉框
+        loopModeBox.setPrefHeight(controlHeight);
+        loopModeBox.setStyle(
+                "-fx-font-size: 13px;" +
+                        "-fx-background-radius: 5;" +
+                        "-fx-border-radius: 5;" +
+                        "-fx-padding: 0 5 0 5;"
+        );
+        // 循环次数 / 结束时间输入框
+        loopCountInput.setPrefHeight(controlHeight);
+        loopCountInput.setStyle(
+                "-fx-font-size: 13px;" +
+                        "-fx-background-radius: 5;" +
+                        "-fx-border-radius: 5;" +
+                        "-fx-padding: 0 5 0 5;"
+        );
+        endTimeInput.setPrefHeight(controlHeight);
+        endTimeInput.setStyle(
+                "-fx-font-size: 13px;" +
+                        "-fx-background-radius: 5;" +
+                        "-fx-border-radius: 5;" +
+                        "-fx-padding: 0 5 0 5;"
+        );
+
+        // 循环间隔输入框
+        loopDelayField.setPrefHeight(controlHeight);
+        loopDelayField.setStyle(
+                "-fx-font-size: 13px;" +
+                        "-fx-background-radius: 5;" +
+                        "-fx-border-radius: 5;" +
+                        "-fx-padding: 0 5 0 5;"
+        );
     }
 
     // MouseClickerGUI.java 加载方案部分
@@ -316,7 +388,19 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
     }
 
     private void runScheme() {
-        if (points.isEmpty()) return;
+        MouseScheme current = schemeListView.getSelectionModel().getSelectedItem();
+        if (current == null || current.getPoints().isEmpty()) return;
+
+        // 复制当前方案点列表，保证执行时不受外部修改影响
+        List<ClickPoint> pointsToRun = new ArrayList<>();
+        for (ClickPoint p : current.getPoints()) {
+            pointsToRun.add(new ClickPoint(
+                    p.getX(), p.getY(), p.getButton(),
+                    p.getMoveDelay(), p.getKeepDelay(),
+                    p.getClickDelay(), p.isDoClick()
+            ));
+        }
+
         running = true;
 
         int loopCount = 0;
@@ -354,7 +438,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
                 int currentLoop = 0;
 
                 while (running) {
-                    for (ClickPoint p : points) {
+                    for (ClickPoint p : pointsToRun) {
                         if (!running) break;
 
                         if (p.getMoveDelay() > 0) Thread.sleep(p.getMoveDelay());
