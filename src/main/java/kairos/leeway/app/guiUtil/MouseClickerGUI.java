@@ -4,17 +4,24 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.TypeReference;
 import javafx.application.Application;
 import javafx.application.Platform;
-import javafx.beans.property.*;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
+import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.cell.CheckBoxTableCell;
 import javafx.scene.control.cell.ComboBoxTableCell;
 import javafx.scene.control.cell.TextFieldTableCell;
@@ -30,10 +37,18 @@ import org.jnativehook.keyboard.NativeKeyListener;
 
 import java.awt.*;
 import java.awt.event.InputEvent;
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -413,9 +428,21 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
 
     private void runScheme() {
         // 先保存当前方案
-
         MouseScheme current = schemeListView.getSelectionModel().getSelectedItem();
-        if (current == null || current.getPoints().isEmpty()) return;
+        if (current == null) {
+            appendLog("没有选中方案，无法运行");
+            return;
+        }
+
+        // 先保存当前方案
+        current.setPoints(FXCollections.observableArrayList(points));
+        saveAllSchemes();
+        appendLog("当前方案已保存");
+
+        if (current.getPoints().isEmpty()) {
+            appendLog("当前方案没有点，无法运行");
+            return;
+        }
         current.setPoints(FXCollections.observableArrayList(points));
         saveAllSchemes();
         appendLog("当前方案已保存");
