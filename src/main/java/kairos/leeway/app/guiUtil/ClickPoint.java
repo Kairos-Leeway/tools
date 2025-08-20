@@ -11,8 +11,11 @@ public class ClickPoint {
     private final IntegerProperty clickDelay = new SimpleIntegerProperty();
     private final BooleanProperty doClick = new SimpleBooleanProperty(true);
     private final BooleanProperty doMove = new SimpleBooleanProperty(true); // 新增：是否挪动
-
-    public ClickPoint(int x, int y, String button, int moveDelay, int keepDelay, int clickDelay, boolean doClick, boolean doMove) {
+    private final StringProperty remark = new SimpleStringProperty("");
+    public String getRemark() { return remark.get(); }
+    public void setRemark(String value) { remark.set(value); }
+    public StringProperty remarkProperty() { return remark; }
+    public ClickPoint(int x, int y, String button, int moveDelay, int keepDelay, int clickDelay, boolean doClick, boolean doMove, String remark) {
         this.x.set(x);
         this.y.set(y);
         this.button.set(button);
@@ -21,6 +24,7 @@ public class ClickPoint {
         this.clickDelay.set(clickDelay);
         this.doClick.set(doClick);
         this.doMove.set(doMove);
+        this.remark.set(remark);
     }
 
     // getter/setter
