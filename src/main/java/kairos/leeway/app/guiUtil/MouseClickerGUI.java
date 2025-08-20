@@ -13,6 +13,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
@@ -62,6 +63,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
     private TableView<ClickPoint> table;
     private TextField loopCountInput, loopDelayField, endTimeInput;
     private ComboBox<String> loopModeBox;
+    private CheckBox returnToStartCheckBox;
     private TextArea logArea;
     private ListView<MouseScheme> schemeListView;
 
@@ -183,25 +185,18 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
             if (selected != null) {
                 int idx = schemeListView.getSelectionModel().getSelectedIndex();
                 schemes.remove(selected);
+
                 if (!schemes.isEmpty()) {
                     schemeListView.getSelectionModel().select(idx > 0 ? idx - 1 : 0);
+                    points.setAll(schemeListView.getSelectionModel().getSelectedItem().getPoints());
+                } else {
+                    // 没有方案了，清空 table
+                    points.clear();
                 }
                 saveAllSchemes();
             }
         });
-        //
-        // renameSchemeBtn.setOnAction(e -> {
-        //     MouseScheme selected = schemeListView.getSelectionModel().getSelectedItem();
-        //     if (selected != null) {
-        //         TextInputDialog dialog = new TextInputDialog(selected.getName());
-        //         dialog.setTitle("重命名方案");
-        //         dialog.setHeaderText(null);
-        //         dialog.setContentText("名称:");
-        //         dialog.showAndWait().ifPresent(selected::setName);
-        //         schemeListView.refresh();
-        //         saveAllSchemes();
-        //     }
-        // });
+
 
         VBox schemeBox = new VBox(5, schemeListView, newSchemeBtn,saveSchemeBtn, deleteSchemeBtn,tips);
         schemeBox.setPadding(new Insets(10)); // 四周空白
@@ -244,6 +239,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         clickDelayCol.setCellFactory(col -> createEditingCell(new javafx.util.converter.IntegerStringConverter()));
         clickDelayCol.setOnEditCommit(event -> event.getRowValue().setClickDelay(event.getNewValue()));
 
+
         TableColumn<ClickPoint, Boolean> doClickCol = new TableColumn<>("是否点击");
         doClickCol.setCellValueFactory(data -> data.getValue().doClickProperty());
         doClickCol.setCellFactory(col -> {
@@ -252,8 +248,11 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
             return cell;
         });
         doClickCol.setEditable(true);
-
-        table.getColumns().addAll(xCol, yCol, buttonCol, moveDelayCol, keepDelayCol, clickDelayCol, doClickCol);
+        TableColumn<ClickPoint, Boolean> doMoveCol = new TableColumn<>("是否挪动");
+        doMoveCol.setCellValueFactory(data -> data.getValue().doMoveProperty());
+        doMoveCol.setCellFactory(CheckBoxTableCell.forTableColumn(doMoveCol));
+        doMoveCol.setEditable(true);
+        table.getColumns().addAll(xCol, yCol, buttonCol, moveDelayCol, keepDelayCol, clickDelayCol, doClickCol,doMoveCol);
         table.setStyle(
                 "-fx-font-size: 13px;" +             // 字体大小
                         "-fx-background-color: #f9f9f9;" +   // 背景颜色
@@ -315,6 +314,9 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         Label loopDelayLabel = new Label("循环间隔(ms):");
         loopDelayLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: #333;");
 
+        returnToStartCheckBox = new CheckBox("回到原点");
+        returnToStartCheckBox.setStyle("-fx-font-size: 13px;");
+
         setStyle();
 
         // 然后布局HBox时增加间距
@@ -326,6 +328,8 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         controls.setPadding(new Insets(5));
         controls.setAlignment(Pos.CENTER_LEFT); // 垂直居中
 
+        controls.getChildren().add(returnToStartCheckBox);
+
         logArea = new TextArea();
         logArea.setEditable(false);
         logArea.setPrefHeight(150);
@@ -336,7 +340,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         centerBox.setPadding(new Insets(10));
         root.setCenter(centerBox);
         root.setStyle("-fx-background-color: #fafafa;");
-        stage.setScene(new Scene(root, 1300, 600));
+        stage.setScene(new Scene(root, 1400, 600));
         stage.setTitle("鼠标点击器");
         stage.show();
 
@@ -426,6 +430,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         }
     }
 
+    // 3️⃣ runScheme() 内新增逻辑
     private void runScheme() {
         MouseScheme currentScheme = schemeListView.getSelectionModel().getSelectedItem();
         if (currentScheme == null) {
@@ -433,10 +438,7 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
             return;
         }
 
-        // 先同步当前视图的点到方案对象
         currentScheme.setPoints(FXCollections.observableArrayList(points));
-
-        // 再保存所有方案到文件
         saveAllSchemes();
         appendLog("所有方案已保存");
         currentSchemeModified = false;
@@ -473,15 +475,16 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
             return;
         }
 
+        Point startPoint = MouseInfo.getPointerInfo().getLocation(); // ✅ 记录初始位置
+
         int finalLoopCount = loopCount;
         long finalEndMillis = endMillis;
         int finalLoopDelay = loopDelay;
 
-        // 复制当前方案的点，避免运行过程中 points 被 UI 修改影响
         List<ClickPoint> pointsToRun = new ArrayList<>();
         for (ClickPoint p : points) {
             pointsToRun.add(new ClickPoint(p.getX(), p.getY(), p.getButton(), p.getMoveDelay(),
-                    p.getKeepDelay(), p.getClickDelay(), p.isDoClick()));
+                    p.getKeepDelay(), p.getClickDelay(), p.isDoClick(), p.isDoMove()));
         }
 
         new Thread(() -> {
@@ -493,9 +496,10 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
                     for (ClickPoint p : pointsToRun) {
                         if (!running) break;
 
-                        // 点的动作延时
-                        if (p.getMoveDelay() > 0) Thread.sleep(p.getMoveDelay());
-                        robot.mouseMove(p.getX(), p.getY());
+                        if (p.isDoMove()) {
+                            if (p.getMoveDelay() > 0) Thread.sleep(p.getMoveDelay());
+                            robot.mouseMove(p.getX(), p.getY());
+                        }
 
                         if (p.isDoClick()) {
                             if (p.getClickDelay() > 0) Thread.sleep(p.getClickDelay());
@@ -513,11 +517,8 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
 
                     currentLoop++;
 
-                    // 判断循环次数或结束时间
                     if (finalLoopCount > 0 && currentLoop >= finalLoopCount) break;
                     if (finalEndMillis > 0 && System.currentTimeMillis() >= finalEndMillis) break;
-
-                    // 每轮循环只等待 loopDelay
                     if (finalLoopDelay > 0) Thread.sleep(finalLoopDelay);
                 }
             } catch (Exception e) {
@@ -525,6 +526,17 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
             } finally {
                 running = false;
                 appendLog("执行结束");
+
+                // ✅ 回到初始位置
+                if (returnToStartCheckBox.isSelected() && startPoint != null) {
+                    try {
+                        Robot robot = new Robot();
+                        robot.mouseMove(startPoint.x, startPoint.y);
+                        appendLog("已回到初始位置 X=" + startPoint.x + " Y=" + startPoint.y);
+                    } catch (AWTException e) {
+                        appendLog("回到初始位置失败：" + e.getMessage());
+                    }
+                }
             }
         }).start();
     }
@@ -574,8 +586,13 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
     @Override
     public void nativeKeyPressed(NativeKeyEvent e) {
         if (e.getKeyCode() == NativeKeyEvent.VC_F2) {
+            MouseScheme current = schemeListView.getSelectionModel().getSelectedItem();
+            if (current == null) {
+                appendLog("请先选择或新建方案才能添加点");
+                return;
+            }
             Point p = MouseInfo.getPointerInfo().getLocation();
-            Platform.runLater(() -> points.add(new ClickPoint(p.x, p.y, "LEFT", 500, 100, 100, true)));
+            Platform.runLater(() -> points.add(new ClickPoint(p.x, p.y, "LEFT", 500, 100, 100, true, true)));
         } else if (e.getKeyCode() == NativeKeyEvent.VC_F3) {
             Platform.runLater(points::clear);
         } else if (e.getKeyCode() == NativeKeyEvent.VC_F8) {
