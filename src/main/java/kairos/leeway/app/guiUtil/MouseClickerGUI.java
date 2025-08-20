@@ -487,8 +487,10 @@ public class MouseClickerGUI extends Application implements NativeKeyListener {
         }
 
         currentScheme.setPoints(FXCollections.observableArrayList(points));
-        saveAllSchemes();
-        appendLog("所有方案已保存");
+        if (currentSchemeModified) {
+            saveAllSchemes();
+            appendLog("所有方案已保存");
+        }
         currentSchemeModified = false;
 
         if (points.isEmpty()) {
